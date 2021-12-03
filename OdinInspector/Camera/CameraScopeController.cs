@@ -1,19 +1,30 @@
 using Sirenix.OdinInspector;
+using Sirenix.Serialization;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class CameraScopeController : MonoBehaviour
 {
     [Title(Headers.Dependancies)]
-    [SerializeField] private Transform _cameraTransform;
-    [SerializeField] private Camera _cameraComponent;
-    [SerializeField] private List<Transform> _followedObjects;
+    [SerializeField, OdinSerialize] private Transform _cameraTransform;
+    [SerializeField, OdinSerialize] private Camera _cameraComponent;
+    [SerializeField, OdinSerialize] private List<Transform> _followedObjects;
 
     [Title(Headers.ScriptSettings)]
-    [SerializeField, Range(0, 0.5f)] private float _viewPadding = 0f;
-    [SerializeField, Range(0, 10f)] private float _scopeSpeed = 0.1f;
-    [SerializeField] private MinMax<float> _cameraSizeMinMax;
-    [SerializeField] private Vector2MinMax<float> _cameraPositionMinMax;
+    [SerializeField, OdinSerialize, Range(0, 0.5f)] private float _viewPadding = 0f;
+    [SerializeField, OdinSerialize, Range(0, 10f)] private float _scopeSpeed = 0.1f;
+    [Space]
+    [SerializeField, OdinSerialize] private Vector2 _cameraPositionOffset;
+    [SerializeField, OdinSerialize] private InspectorTogglable<MinMax<float>> _cameraSizeMinMax;
+    [SerializeField, OdinSerialize] private InspectorTogglable<Vector2MinMax<float>> _cameraPositionMinMax;
+
+    private bool _canFollow;
+    private Vector2 _cameraAvgPosition;
+    private Vector2 _cameraAspectPosition;
+    private float _cameraInitialZPosition;
+    private float _cameraOrthoMagnitude;
+    private float _targetOrthoSize;
+    private float _computedScopeSpeed;
 
     public List<Transform> FollowedObjects
     {
@@ -21,19 +32,11 @@ public class CameraScopeController : MonoBehaviour
         set => _followedObjects = value;
     }
 
-    private bool _canFollow;
     public bool CanFollow
     {
         get => _canFollow;
         set => _canFollow = value;
     }
-
-    private float _cameraInitialZPosition;
-    private Vector2 _cameraAvgPosition;
-    private Vector2 _cameraAspectPosition;
-    private float _cameraOrthoMagnitude;
-    private float _targetOrthoSize;
-    private float _computedScopeSpeed;
 
     private void Awake()
     {
@@ -59,9 +62,15 @@ public class CameraScopeController : MonoBehaviour
 
             _computedScopeSpeed = Time.fixedDeltaTime * (1 + Mathf.Abs(Vector2.Distance(_cameraTransform.position, _cameraAvgPosition))) * _scopeSpeed;
 
-            _cameraAvgPosition /= FollowedObjects.Count;
-            _cameraAvgPosition.x = Mathf.Clamp(_cameraAvgPosition.x, _cameraPositionMinMax.x.min, _cameraPositionMinMax.x.max);
-            _cameraAvgPosition.y = Mathf.Clamp(_cameraAvgPosition.y, _cameraPositionMinMax.y.min, _cameraPositionMinMax.y.max);
+            if (_cameraPositionMinMax.IsEnabled) 
+            {
+                _cameraAvgPosition /= FollowedObjects.Count;
+                _cameraAvgPosition.x = Mathf.Clamp(_cameraAvgPosition.x, _cameraPositionMinMax.Value.x.min, _cameraPositionMinMax.Value.x.max);
+                _cameraAvgPosition.y = Mathf.Clamp(_cameraAvgPosition.y, _cameraPositionMinMax.Value.y.min, _cameraPositionMinMax.Value.y.max);
+            }
+
+            if (_cameraSizeMinMax.IsEnabled)
+                _targetOrthoSize = Mathf.Clamp(_targetOrthoSize, _cameraSizeMinMax.Value.min, _cameraSizeMinMax.Value.max);
 
             _cameraTransform.position = Vector3.Lerp(
                 _cameraTransform.position,
@@ -70,7 +79,7 @@ public class CameraScopeController : MonoBehaviour
 
             _cameraComponent.orthographicSize = Mathf.Lerp(
                 _cameraComponent.orthographicSize,
-                Mathf.Clamp(_targetOrthoSize, _cameraSizeMinMax.min, _cameraSizeMinMax.max),
+                _targetOrthoSize,
                 _computedScopeSpeed);
         }
     }
